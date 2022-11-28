@@ -2,7 +2,10 @@
 #
 # Indexes all vulnerable Dynamic groups in an OCI environement with their associated IAM policy if any.
 #
-# Note: the Search API does not support the 'dynamic-group' resource
+# Note 1: the Search API does not support the 'dynamic-group' resource
+#
+# Note 2: dynamic groups should not have sensitive permissions, as any user who is able to deploy 
+#         new Compute instances will be able to endorse those permissions
 #
 ####
 
