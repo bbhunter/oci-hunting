@@ -1,11 +1,8 @@
 #### Description #################################################################################
 #
-# Indexes all vulnerable Dynamic groups in an OCI environement with their associated IAM policy if any.
+# Indexes all Dynamic groups with an 'any' matching-rule scheme, as well as their associated IAM policy if any.
 #
 # Note 1: the Search API does not support the 'dynamic-group' resource
-#
-# Note 2: dynamic groups should not have sensitive permissions, as any user who is able to deploy 
-#         new Compute instances will be able to endorse those permissions
 #
 ####
 
@@ -21,9 +18,9 @@ echo "-----"
 echo "The following dynamic groups are vulnerable and associated with the following IAM policies:"
 
 # Gather vulnerable dynamic groups
-all_dynamic_groups=($(oci iam dynamic-group list --all | jq -r '.data[] | {"name","id"}' | jq -c))
+dynamic_groups_with_any_matching_scheme=($(oci iam dynamic-group list --all | jq -r '.data[] | select(."matching-rule"|test("any.*")) | {"name","id"}' | jq -c))
 
-for dynamic_group in ${all_dynamic_groups[@]}
+for dynamic_group in ${dynamic_groups_with_any_matching_scheme[@]}
 do
     dynamic_group_name="$(echo $dynamic_group | jq -r '.name')"
     dynamic_group_id="$(echo $dynamic_group | jq -r '.id')"
