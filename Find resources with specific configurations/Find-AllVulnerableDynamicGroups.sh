@@ -2,7 +2,8 @@
 #
 # Indexes all Dynamic groups with an 'any' matching-rule scheme, as well as their associated IAM policy if any.
 #
-# Note 1: the Search API does not support the 'dynamic-group' resource
+# Note: DOES NOT WORK - Identifying the matching-rule scheme of a dynamic group does not seem possible via oci cli
+#       Use 'Find-AllPoliciesWithDynamicGroupStatements.sh' instead, and analyze the rule-set of each group to see if they are vulnerable
 #
 ####
 
@@ -17,7 +18,7 @@ vulnerable_values=(
 echo "-----"
 echo "The following dynamic groups are vulnerable and associated with the following IAM policies:"
 
-# Gather vulnerable dynamic groups
+# Gather all vulnerable dynamic groups
 dynamic_groups_with_any_matching_scheme=($(oci iam dynamic-group list --all | jq -r '.data[] | select(."matching-rule"|test("any.*")) | {"name","id"}' | jq -c | sed 's/\s/+/g' | sort))
 
 for dynamic_group in ${dynamic_groups_with_any_matching_scheme[@]}
@@ -30,13 +31,15 @@ do
     do
         if [[ $(echo $rule_set | grep "$vulnerable_value") ]]
         then
-            compartment_id="$(oci iam dynamic-group get --dynamic-group-id $dynamic_group_id | jq -r '.data | ."compartment-id"')"
-            compartment_name="$(oci iam compartment get --compartment-id $compartment_id | jq -r '.data | ."name"')"
-            all_vulnerable_dynamic_groups+=("${compartment_name}/${dynamic_group_name}")
+            echo "$dynamic_group_name"
+            all_vulnerable_dynamic_groups+=("$dynamic_group_name")
             break
         fi
     done
 done
+
+echo ${all_vulnerable_dynamic_groups[@]}
+exit 0
 
 # For each vulnerable group, find their associated IAM policy
 all_iam_policies=($(oci search resource structured-search --query-text "QUERY policy resources" --query 'data.items[*].{name:"display-name",id:"identifier"}' --output json | jq -r '.[]' | jq -c | sed 's/\s/+/g'))
@@ -56,7 +59,6 @@ done
 
 for vulnerable_dynamic_group in ${all_vulnerable_dynamic_groups[@]}
 do
-    vulnerable_dynamic_group_name="$(echo $vulnerable_dynamic_group | sed 's|.*/||')"
     is_first_associated_policy='True'
     has_vulnerable_dynamic_group_policies='False'
 
@@ -64,7 +66,7 @@ do
     do
         iam_policy_name="$(echo $iam_policy | jq -r '.name')"
         iam_policy_id="$(echo $iam_policy | jq -r '.id')"
-        is_policy_associated_with_vulnerable_dynamic_group=$(oci iam policy get --policy-id "$iam_policy_id" | jq -r '.data | ."statements"[]' | grep -iF 'dynamic-group' | grep -iF "$vulnerable_dynamic_group_name")
+        is_policy_associated_with_vulnerable_dynamic_group=$(oci iam policy get --policy-id "$iam_policy_id" | jq -r '.data | ."statements"[]' | grep -iF 'dynamic-group' | grep -iF "$vulnerable_dynamic_group")
 
         if [[ "$is_policy_associated_with_vulnerable_dynamic_group" ]]
         then
@@ -76,14 +78,14 @@ do
 
             has_vulnerable_dynamic_group_policies='True'
             echo "[**] Policy: $iam_policy_name"
-        else
-            vulnerable_dynamic_groups_without_iam_policy+=("$vulnerable_dynamic_group")
         fi
     done
 
     if [[ "$has_vulnerable_dynamic_group_policies" == 'True' ]]
     then
         echo ""
+    else
+        vulnerable_dynamic_groups_without_iam_policy+=("$vulnerable_dynamic_group")
     fi
 done
 
