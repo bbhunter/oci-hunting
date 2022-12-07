@@ -18,7 +18,7 @@ echo "-----"
 echo "The following dynamic groups are vulnerable and associated with the following IAM policies:"
 
 # Gather vulnerable dynamic groups
-dynamic_groups_with_any_matching_scheme=($(oci iam dynamic-group list --all | jq -r '.data[] | select(."matching-rule"|test("any.*")) | {"name","id"}' | jq -c))
+dynamic_groups_with_any_matching_scheme=($(oci iam dynamic-group list --all | jq -r '.data[] | select(."matching-rule"|test("any.*")) | {"name","id"}' | jq -c | sed 's/\s/+/g' | sort))
 
 for dynamic_group in ${dynamic_groups_with_any_matching_scheme[@]}
 do
@@ -30,7 +30,9 @@ do
     do
         if [[ $(echo $rule_set | grep "$vulnerable_value") ]]
         then
-            all_vulnerable_dynamic_groups+=("$dynamic_group_name")
+            compartment_id="$(oci iam dynamic-group get --dynamic-group-id $dynamic_group_id | jq -r '.data | ."compartment-id"')"
+            compartment_name="$(oci iam compartment get --compartment-id $compartment_id | jq -r '.data | ."name"')"
+            all_vulnerable_dynamic_groups+=("${compartment_name}/${dynamic_group_name}")
             break
         fi
     done
@@ -54,6 +56,7 @@ done
 
 for vulnerable_dynamic_group in ${all_vulnerable_dynamic_groups[@]}
 do
+    vulnerable_dynamic_group_name="$(echo $vulnerable_dynamic_group | sed 's|.*/||')"
     is_first_associated_policy='True'
     has_vulnerable_dynamic_group_policies='False'
 
@@ -61,18 +64,18 @@ do
     do
         iam_policy_name="$(echo $iam_policy | jq -r '.name')"
         iam_policy_id="$(echo $iam_policy | jq -r '.id')"
-        is_policy_associated_with_vulnerable_dynamic_group=$(oci iam policy get --policy-id "$iam_policy_id" | jq -r '.data | ."statements"[]' | grep -iF 'dynamic-group' | grep "$vulnerable_dynamic_group")
+        is_policy_associated_with_vulnerable_dynamic_group=$(oci iam policy get --policy-id "$iam_policy_id" | jq -r '.data | ."statements"[]' | grep -iF 'dynamic-group' | grep -iF "$vulnerable_dynamic_group_name")
 
         if [[ "$is_policy_associated_with_vulnerable_dynamic_group" ]]
         then
             if [[ "$is_first_associated_policy" == 'True' ]]
             then
-                echo "Dynamic group: $vulnerable_dynamic_group"
+                echo "[*] Dynamic group: $vulnerable_dynamic_group"
                 is_first_associated_policy='False'
             fi
 
             has_vulnerable_dynamic_group_policies='True'
-            echo "IAM policy: $iam_policy_name"
+            echo "[**] Policy: $iam_policy_name"
         else
             vulnerable_dynamic_groups_without_iam_policy+=("$vulnerable_dynamic_group")
         fi
