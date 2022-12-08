@@ -1,6 +1,6 @@
-# Find OCI resources with specific configurations
+# Find Open OCI resources
 
-Collection of scripts and one-liners to find OCI resources with specific configurations. 
+Collection of scripts to find publicly exposed OCI resources. 
 
 
 ## Prerequisite
